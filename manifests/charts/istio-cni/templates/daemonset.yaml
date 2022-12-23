@@ -1,3 +1,51 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: dns-intercept
+  namespace: istio-system
+  labels:
+    app: dns-intercept
+spec:
+  selector:
+    matchLabels:
+      app: dns-intercept
+  template:
+    metadata:
+      labels:
+        app: dns-intercept
+    spec:
+      volumes:
+      - name: istiod-ca-cert
+        configMap:
+          name: istio-ca-root-cert
+      - name: istio-token
+        projected:
+          sources:
+          - serviceAccountToken:
+              path: istio-token
+              expirationSeconds: 43200
+              #audience: {{ .Values.global.sds.token.aud }}
+      containers:
+      - name: istio-proxy
+        image: localhost:5000/proxyv2:kdorosh
+        imagePullPolicy: Always
+        args: ["proxy"]
+        ports:
+        - containerPort: 15053
+        env:
+        - name: DNS_ONLY
+          value: "true"
+        - name: ISTIO_META_DNS_CAPTURE
+          value: "true"
+        - name: ISTIO_META_DNS_AUTO_ALLOCATE
+          value: "true"
+        volumeMounts:
+        - mountPath: /var/run/secrets/istio
+          name: istiod-ca-cert
+        - name: istio-token
+          mountPath: /var/run/secrets/tokens
+          readOnly: true
+---
 # This manifest installs the Istio install-cni container, as well
 # as the Istio CNI plugin and config on
 # each master and worker node in a Kubernetes cluster.
@@ -68,7 +116,7 @@ spec:
           image: "{{ .Values.cni.hub | default .Values.global.hub }}/{{ .Values.cni.image | default "install-cni" }}:{{ .Values.cni.tag | default .Values.global.tag }}{{with (.Values.cni.variant | default .Values.global.variant)}}-{{.}}{{end}}"
 {{- end }}
 {{- if or .Values.cni.pullPolicy .Values.global.imagePullPolicy }}
-          imagePullPolicy: {{ .Values.cni.pullPolicy | default .Values.global.imagePullPolicy }}
+          imagePullPolicy: Always
 {{- end }}
           readinessProbe:
             httpGet:
@@ -96,6 +144,8 @@ spec:
             - name: CNI_CONF_NAME
               value: "{{ .Values.cni.cniConfFileName }}"
 {{- end }}
+            - name: ISTIO_META_DNS_CAPTURE
+              value: "true"
             # The CNI network config to install on each node.
             - name: CNI_NETWORK_CONFIG
               valueFrom:
@@ -192,7 +242,7 @@ spec:
           image: "{{ .Values.cni.hub | default .Values.global.hub }}/{{ .Values.cni.image | default "install-cni" }}:{{ .Values.cni.tag | default .Values.global.tag }}{{with (.Values.cni.variant | default .Values.global.variant)}}-{{.}}{{end}}"
 {{- end }}
 {{- if or .Values.cni.pullPolicy .Values.global.imagePullPolicy }}
-          imagePullPolicy: {{ .Values.cni.pullPolicy | default .Values.global.imagePullPolicy }}
+          imagePullPolicy: Always
 {{- end }}
           command: ["/opt/local/bin/istio-cni-taint"]
           securityContext:

@@ -1014,7 +1014,7 @@ func TestServiceEntryDNS(t *testing.T) {
 	framework.NewTest(t).
 		Features("traffic.ambient").
 		Run(func(t framework.TestContext) {
-			skipOnNativeZtunnel(t, "ServiceEntry not supported")
+			// skipOnNativeZtunnel(t, "ServiceEntry not supported")
 			svcs := apps.All
 			for _, svc := range svcs {
 				if svc.Config().IsUncaptured() || svc.Config().HasSidecar() {
@@ -1028,7 +1028,7 @@ spec:
   exportTo:
   - .
   hosts:
-  - httpbin.org
+  - kdorosh.org
   ports:
   - name: http
     number: 80
@@ -1039,7 +1039,7 @@ spec:
 				t.NewSubTestf("%v to ServiceEntry", svc.Config().Service).Run(func(t framework.TestContext) {
 					// TODO use Sidecar to simulate external service (see tests/integration/pilot/mirror_test.go)
 					svc.CallOrFail(t, echo.CallOptions{
-						Address: "httpbin.org",
+						Address: "httpbin.org", // change to match SE and be fake
 						Port:    echo.Port{Name: "http", ServicePort: 80},
 						Scheme:  scheme.HTTP,
 						HTTP: echo.HTTP{

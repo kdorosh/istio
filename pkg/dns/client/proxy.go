@@ -63,6 +63,7 @@ func newDNSProxy(protocol, addr string, resolver *LocalDNSServer) (*dnsProxy, er
 }
 
 func (p *dnsProxy) start() {
+	log.Info("KDOROSH starting local DNS server")
 	err := p.server.ActivateAndServe()
 	if err != nil {
 		log.Errorf("Local %s DNS server terminated: %v", p.protocol, err)

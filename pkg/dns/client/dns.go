@@ -92,6 +92,9 @@ func NewLocalDNSServer(proxyNamespace, proxyDomain string, addr string, forwardT
 		forwardToUpstreamParallel: forwardToUpstreamParallel,
 	}
 
+	// TODO(kdorosh)
+	addr = "0.0.0.0:15053"
+
 	registerStats()
 
 	// proxyDomain could contain the namespace making it redundant.
@@ -187,6 +190,7 @@ func (h *LocalDNSServer) StartDNS() {
 }
 
 func (h *LocalDNSServer) UpdateLookupTable(nt *dnsProto.NameTable) {
+	log.Info("Update lookup table")
 	lookupTable := &LookupTable{
 		allHosts: map[string]struct{}{},
 		name4:    map[string][]dns.RR{},
@@ -248,13 +252,14 @@ func (h *LocalDNSServer) ServeDNS(proxy *dnsProxy, w dns.ResponseWriter, req *dn
 		id := uuid.New()
 		log = log.WithLabels("id", id)
 	}
-	log.Debugf("request %v", req)
+	log.Infof("request %v", req)
 
 	if len(req.Question) == 0 {
 		response = new(dns.Msg)
 		response.SetReply(req)
 		response.Rcode = dns.RcodeServerFailure
 		_ = w.WriteMsg(response)
+		log.Info("empty request")
 		return
 	}
 
@@ -266,7 +271,7 @@ func (h *LocalDNSServer) ServeDNS(proxy *dnsProxy, w dns.ResponseWriter, req *dn
 			response.Truncate(size(proxy.protocol, req))
 			_ = w.WriteMsg(response)
 		} else {
-			log.Debugf("dns request for host %q before lookup table is loaded", hostname)
+			log.Infof("dns request for host %q before lookup table is loaded", hostname)
 			response = new(dns.Msg)
 			response.SetReply(req)
 			response.Rcode = dns.RcodeServerFailure
@@ -275,6 +280,13 @@ func (h *LocalDNSServer) ServeDNS(proxy *dnsProxy, w dns.ResponseWriter, req *dn
 		return
 	}
 	lookupTable := lp.(*LookupTable)
+
+	var stringList []string
+	for host := range lookupTable.allHosts {
+		stringList = append(stringList, host)
+	}
+	log.Infof("all hosts: %v", strings.Join(stringList, ", "))
+
 	var answers []dns.RR
 
 	// This name will always end in a dot.

@@ -152,13 +152,19 @@ func (s *Server) UpdateConfig() {
 }
 
 var ztunnelLabels = labels.SelectorFromValidatedSet(labels.Set{"app": "ztunnel"})
+var dnsInterceptLabels = labels.SelectorFromValidatedSet(labels.Set{"app": "dns-intercept"})
 
 func (s *Server) ReconcileZtunnel() error {
 	pods, err := s.podLister.Pods(metav1.NamespaceAll).List(ztunnelLabels)
 	if err != nil {
 		return err
 	}
+	dnsIntpods, err := s.podLister.Pods(metav1.NamespaceAll).List(dnsInterceptLabels)
+	if err != nil {
+		return err
+	}
 	var activePod *corev1.Pod
+	var activeDnsInterceptPod *corev1.Pod
 	for _, p := range pods {
 		ready := kube.CheckPodReady(p) == nil
 		if !ready {
@@ -171,6 +177,21 @@ func (s *Server) ReconcileZtunnel() error {
 			// If we have multiple pods that are ready, use the newest one.
 			// This ensures on a rolling update we start sending traffic to the new pod and drain the old one.
 			activePod = p
+		}
+	}
+
+	for _, p := range dnsIntpods {
+		ready := kube.CheckPodReady(p) == nil
+		if !ready {
+			continue
+		}
+		if activeDnsInterceptPod == nil {
+			// Only pod ready, mark this as active
+			activeDnsInterceptPod = p
+		} else if p.CreationTimestamp.After(activeDnsInterceptPod.CreationTimestamp.Time) {
+			// If we have multiple pods that are ready, use the newest one.
+			// This ensures on a rolling update we start sending traffic to the new pod and drain the old one.
+			activeDnsInterceptPod = p
 		}
 	}
 
@@ -188,8 +209,8 @@ func (s *Server) ReconcileZtunnel() error {
 		return nil
 	}
 	s.UpdateConfig()
-	if activePod == nil {
-		log.Infof("active ztunnel updated, no ztunnel running on the node")
+	if activePod == nil || activeDnsInterceptPod == nil {
+		log.Info("active ztunnel updated, no ztunnel running on the node")
 		s.cleanup()
 		return nil
 	}
@@ -202,7 +223,7 @@ func (s *Server) ReconcileZtunnel() error {
 	}
 
 	captureDNS := getEnvFromPod(activePod, "ISTIO_META_DNS_CAPTURE") == "true"
-	err = s.CreateRulesOnNode(veth, activePod.Status.PodIP, captureDNS)
+	err = s.CreateRulesOnNode(veth, activePod.Status.PodIP, activeDnsInterceptPod.Status.PodIP, captureDNS)
 	if err != nil {
 		return fmt.Errorf("failed to configure node for ztunnel: %v", err)
 	}

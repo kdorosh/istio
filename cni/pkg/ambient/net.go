@@ -241,7 +241,7 @@ func GetHostIP(kubeClient kubernetes.Interface) (string, error) {
 
 // CreateRulesOnNode initializes the routing, firewall and ipset rules on the node.
 // https://github.com/solo-io/istio-sidecarless/blob/master/redirect-worker.sh
-func (s *Server) CreateRulesOnNode(ztunnelVeth, ztunnelIP string, captureDNS bool) error {
+func (s *Server) CreateRulesOnNode(ztunnelVeth, ztunnelIP, dnsInterceptIp string, captureDNS bool) error {
 	var err error
 
 	log.Debugf("CreateRulesOnNode: ztunnelVeth=%s, ztunnelIP=%s", ztunnelVeth, ztunnelIP)
@@ -391,7 +391,7 @@ func (s *Server) CreateRulesOnNode(ztunnelVeth, ztunnelIP string, captureDNS boo
 				"--match-set", Ipset.Name, "src",
 				"--dport", "53",
 				"-j", "DNAT",
-				"--to", fmt.Sprintf("%s:%d", ztunnelIP, constants.DNSCapturePort),
+				"--to", fmt.Sprintf("%s:%d", dnsInterceptIp, constants.DNSCapturePort),
 			),
 		)
 	}

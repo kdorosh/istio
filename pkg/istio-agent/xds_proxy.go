@@ -159,8 +159,28 @@ func initXdsProxy(ia *Agent) (*XdsProxy, error) {
 		ia:                    ia,
 		downstreamGrpcOptions: ia.cfg.DownstreamGrpcOptions,
 	}
-
+	log.Infof("KDOROSH io.localDNSServer: %v", ia.localDNSServer)
 	if ia.localDNSServer != nil {
+		log.Info("KDOROSH adding local dns server callback to update lookup table")
+
+		// // changes every once in a while
+		// ip, err := net.ResolveIPAddr("ip", "google.com")
+		// if err != nil {
+		// 	panic(err)
+		// }
+		// log.Infof("KDOROSH current google ip: %v", ip)
+		// ipStr := ip.IP.String()
+
+		ia.localDNSServer.UpdateLookupTable(&dnsProto.NameTable{
+			Table: map[string]*dnsProto.NameTable_NameInfo{
+				"kdorosh.org": {
+					Ips: []string{"192.168.0.2"},
+					// Ips:      []string{ipStr}, // google.com
+					Registry: "istio",
+				},
+			},
+		})
+
 		proxy.handlers[v3.NameTableType] = func(resp *anypb.Any) error {
 			var nt dnsProto.NameTable
 			if err := resp.UnmarshalTo(&nt); err != nil {

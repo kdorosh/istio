@@ -333,46 +333,53 @@ func (a *Agent) Run(ctx context.Context) (func(), error) {
 		return nil, fmt.Errorf("failed to start local DNS server: %v", err)
 	}
 
-	socketExists, err := checkSocket(ctx, security.WorkloadIdentitySocketPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check SDS socket: %v", err)
-	}
-
-	if socketExists {
-		log.Info("Workload SDS socket found. Istio SDS Server won't be started")
-	} else {
-		log.Info("Workload SDS socket not found. Starting Istio SDS Server")
-		err = a.initSdsServer()
+	if os.Getenv("DNS_ONLY") != "true" {
+		socketExists, err := checkSocket(ctx, security.WorkloadIdentitySocketPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to start SDS server: %v", err)
+			return nil, fmt.Errorf("failed to check SDS socket: %v", err)
+		}
+
+		if socketExists {
+			log.Info("Workload SDS socket found. Istio SDS Server won't be started")
+		} else {
+			log.Info("Workload SDS socket not found. Starting Istio SDS Server")
+			err = a.initSdsServer()
+			if err != nil {
+				return nil, fmt.Errorf("failed to start SDS server: %v", err)
+			}
 		}
 	}
+
+	// required for dns table to load!
 	a.xdsProxy, err = initXdsProxy(a)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start xds proxy: %v", err)
 	}
-	if a.cfg.ProxyXDSDebugViaAgent {
-		err = a.xdsProxy.initDebugInterface(a.cfg.ProxyXDSDebugViaAgentPort)
-		if err != nil {
-			return nil, fmt.Errorf("failed to start istio tap server: %v", err)
-		}
-	}
 
-	if a.cfg.GRPCBootstrapPath != "" {
-		if err := a.generateGRPCBootstrap(); err != nil {
-			return nil, fmt.Errorf("failed generating gRPC XDS bootstrap: %v", err)
-		}
-	}
-	if a.proxyConfig.ControlPlaneAuthPolicy != mesh.AuthenticationPolicy_NONE {
-		rootCAForXDS, err := a.FindRootCAForXDS()
-		if err != nil {
-			return nil, fmt.Errorf("failed to find root XDS CA: %v", err)
-		}
-		go a.startFileWatcher(ctx, rootCAForXDS, func() {
-			if err := a.xdsProxy.initIstiodDialOptions(a); err != nil {
-				log.Warnf("Failed to init xds proxy dial options")
+	if os.Getenv("DNS_ONLY") != "true" {
+		if a.cfg.ProxyXDSDebugViaAgent {
+			err = a.xdsProxy.initDebugInterface(a.cfg.ProxyXDSDebugViaAgentPort)
+			if err != nil {
+				return nil, fmt.Errorf("failed to start istio tap server: %v", err)
 			}
-		})
+		}
+
+		if a.cfg.GRPCBootstrapPath != "" {
+			if err := a.generateGRPCBootstrap(); err != nil {
+				return nil, fmt.Errorf("failed generating gRPC XDS bootstrap: %v", err)
+			}
+		}
+		if a.proxyConfig.ControlPlaneAuthPolicy != mesh.AuthenticationPolicy_NONE {
+			rootCAForXDS, err := a.FindRootCAForXDS()
+			if err != nil {
+				return nil, fmt.Errorf("failed to find root XDS CA: %v", err)
+			}
+			go a.startFileWatcher(ctx, rootCAForXDS, func() {
+				if err := a.xdsProxy.initIstiodDialOptions(a); err != nil {
+					log.Warnf("Failed to init xds proxy dial options")
+				}
+			})
+		}
 	}
 
 	if !a.EnvoyDisabled() {
@@ -395,6 +402,7 @@ func (a *Agent) Run(ctx context.Context) (func(), error) {
 			<-ctx.Done()
 		}()
 	}
+
 	return a.wg.Wait, nil
 }
 
@@ -491,6 +499,8 @@ func (a *Agent) startFileWatcher(ctx context.Context, filePath string, handler f
 
 func (a *Agent) initLocalDNSServer() (err error) {
 	// we don't need dns server on gateways
+	fmt.Println("KDOROSH println attempt init local DNS server")
+	log.Info("KDOROSH attempt init local DNS server")
 	if a.cfg.DNSCapture && a.cfg.ProxyType == model.SidecarProxy {
 		if a.localDNSServer, err = dnsClient.NewLocalDNSServer(a.cfg.ProxyNamespace, a.cfg.ProxyDomain, a.cfg.DNSAddr,
 			a.cfg.DNSForwardParallel); err != nil {
