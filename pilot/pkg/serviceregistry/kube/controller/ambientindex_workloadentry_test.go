@@ -55,6 +55,7 @@ func TestAmbientIndex_WorkloadEntries(t *testing.T) {
 		ClusterID:            "cluster0",
 		WorkloadEntryEnabled: true,
 	})
+	controller.opts.MeshServiceController.AppendServiceHandler(controller.ServiceEntryHandler)
 	pc := clienttest.Wrap(t, controller.podsClient)
 	sc := clienttest.Wrap(t, controller.services)
 	cfg.RegisterEventHandler(gvk.AuthorizationPolicy, controller.AuthorizationPolicyHandler)
