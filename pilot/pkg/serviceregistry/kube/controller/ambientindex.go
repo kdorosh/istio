@@ -26,7 +26,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/cache"
 
-	apiv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
 	"istio.io/istio/pilot/pkg/model"
 	"istio.io/istio/pilot/pkg/serviceregistry/kube"
 	"istio.io/istio/pkg/config/constants"
@@ -313,6 +312,7 @@ func (c *Controller) extractWorkload(p *v1.Pod) *model.WorkloadInfo {
 	}
 
 	policies := c.selectorAuthorizationPolicies(p.Namespace, p.Labels)
+	policies = append(policies, c.convertedSelectorPeerAuthentications(p.Namespace, p.Labels)...)
 	wl := c.constructWorkload(p, waypoint, policies)
 	if wl == nil {
 		return nil
@@ -735,10 +735,7 @@ func (a *AmbientIndex) handleService(obj any, isDelete bool, c *Controller) sets
 		}
 	}
 
-	var workloadEntries []*apiv1alpha3.WorkloadEntry
-	if c.workloadEntryEnabled {
-		workloadEntries = c.getWorkloadEntriesInService(svc)
-	}
+	workloadEntries := c.getWorkloadEntriesInService(svc)
 	for _, w := range workloadEntries {
 		wl := c.extractWorkloadEntry(w)
 		// Can be nil if the WorkloadEntry IP has not been mapped yet
@@ -754,7 +751,7 @@ func (a *AmbientIndex) handleService(obj any, isDelete bool, c *Controller) sets
 			for _, networkAddr := range networkAddressFromWorkload(wl) {
 				a.byWorkloadEntry[networkAddr] = wl
 			}
-			a.byUID[c.generateWorkloadEntryUID(w.GetNamespace(), w.GetName())] = wl
+			a.byUID[wl.Uid] = wl
 			wls[wl.Uid] = wl
 		}
 	}
